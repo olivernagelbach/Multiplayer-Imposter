@@ -229,29 +229,22 @@
         { "word": "Toyota", "hint": "World's largest automaker" },
         { "word": "Lego", "hint": "Building brick toy" }
     ],
-    "Hot celebrities": [
+    "Hot Celebrities": [
         { "word": "Zendaya", "hint": "Euphoria and Spider-Man actress" },
-        { "word": "Timothee", "hint": "Dune heartthrob actor" },
-        { "word": "Margot", "hint": "Barbie movie star" },
-        { "word": "Sydney", "hint": "Euphoria blonde actress" },
-        { "word": "Tom Holland", "hint": "British Spider-Man actor" },
-        { "word": "Jacob Elordi", "hint": "Tall Euphoria actor" },
-        { "word": "Anya", "hint": "Queen's Gambit chess actress" },
-        { "word": "Sabrina", "hint": "Espresso pop singer" },
-        { "word": "Bad Bunny", "hint": "Puerto Rican reggaeton star" },
+        { "word": "Margot Robbie", "hint": "Barbie movie" },
+        { "word": "Sydney Sweeney", "hint": "Euphoria blonde actress" },
+        { "word": "Sabrina Carpenter", "hint": "Espresso pop singer" },
         { "word": "Dua Lipa", "hint": "Levitating pop singer" },
-        { "word": "Henry Cavill", "hint": "Superman and Witcher actor" },
         { "word": "Jenna Ortega", "hint": "Wednesday Addams actress" },
-        { "word": "Pedro Pascal", "hint": "Mandalorian daddy actor" },
-        { "word": "Florence", "hint": "Black Widow actress" },
-        { "word": "Austin Butler", "hint": "Elvis movie actor" },
         { "word": "Ana de Armas", "hint": "Blonde Marilyn actress" },
-        { "word": "Chris Evans", "hint": "Captain America actor" },
-        { "word": "Scarlett", "hint": "Black Widow actress name" },
-        { "word": "Ryan Gosling", "hint": "Ken from Barbie" },
-        { "word": "Blake Lively", "hint": "Gossip Girl actress" }
+        { "word": "Scarlett Johansson", "hint": "Black Widow actress name" },
+        { "word": "Kim Kardashian", "hint": "kanye west" },
+        { "word": "Megan Fox", "hint": "transformers" },
+        { "word": "Mia Khalifa", "hint": "Mia" },
+        { "word": "Maddison Beer", "hint": "Alcohol" },
+        { "word": "Ice Spice", "hint": "The Shit" }
     ],
-    "Clash Royale cards": [
+    "Clash Royale Cards": [
         { "word": "Knight", "hint": "Mustached good stats" },
         { "word": "Archers", "hint": "Two pink bow ladies" },
         { "word": "Goblins", "hint": "Three green speedsters" },
