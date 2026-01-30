@@ -594,6 +594,10 @@
                 addPlayer(id, myName);
             });
             peer.on('connection', c => setupHostConnection(c));
+            peer.on('error', err => {
+                alert('Error creating room. Please try again.');
+                console.error('Peer error:', err);
+            });
         }
 
         function joinRoom() {
@@ -606,6 +610,11 @@
                 myId = id;
                 conn = peer.connect(roomId);
                 setupClientConnection(conn);
+            });
+            
+            peer.on('error', err => {
+                alert('Failed to join room. Check the Room ID and try again.');
+                console.error('Peer error:', err);
             });
         }
 
@@ -623,11 +632,16 @@
         }
 
         function setupClientConnection(c) {
+            c.on('open', () => {
+                c.send({ type: 'join-success', name: myName });
+                document.getElementById('room-display').innerText = `Connected to Room`;
+                showScreen('room-screen');
+            });
+            
             c.on('data', data => {
                 if (data.type === 'player-list') {
                     players = data.players;
                     updatePlayerListUI();
-                    showScreen('room-screen');
                 }
                 if (data.type === 'game-start') {
                     secretWord = data.word;
@@ -641,8 +655,10 @@
                     showResults(data);
                 }
             });
-            c.on('open', () => {
-                c.send({ type: 'join-success', name: myName });
+            
+            c.on('error', err => {
+                alert('Connection error: ' + err);
+                console.error('Connection error:', err);
             });
         }
 
