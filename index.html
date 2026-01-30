@@ -17,9 +17,9 @@
         .player-item { padding: 10px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
         .role-box { padding: 20px; border: 2px solid var(--primary); border-radius: 10px; margin: 20px 0; background: #312e81; }
         .impostor { color: #f43f5e; font-weight: bold; }
-        .vote-btn { background: #334155; text-align: left; margin-bottom: 5px; }
+        .vote-btn { background: #334155; text-align: left; }
         .vote-btn.selected { background: #f43f5e; }
-        select { width: 100%; padding: 12px; margin-bottom: 10px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 5px; font-size: 16px; }
+        select { width: 100%; padding: 10px; margin-bottom: 10px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -70,7 +70,33 @@
     </div>
 
     <script>
+        // --- DATA LOADING ---
         let gameData = {}; 
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('categories.json');
+                if (!response.ok) throw new Error("File not found");
+                gameData = await response.json();
+                
+                const catSelect = document.getElementById('category-select');
+                catSelect.innerHTML = ''; 
+                Object.keys(gameData).forEach(cat => {
+                    let opt = document.createElement('option');
+                    opt.value = cat; 
+                    opt.innerText = cat;
+                    catSelect.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load categories.json:", err);
+                document.getElementById('category-select').innerHTML = '<option>Error loading categories</option>';
+            }
+        }
+
+        // Initialize loading
+        loadCategories();
+
+        // --- PEER & GAME STATE ---
         let peer, conn, myId, myName;
         let isHost = false;
         let players = []; 
@@ -84,29 +110,6 @@
         const roomScreen = document.getElementById('room-screen');
         const gameScreen = document.getElementById('game-screen');
         const resultScreen = document.getElementById('result-screen');
-
-        async function loadCategories() {
-            try {
-                // The ?v= forces the browser to skip the cache and get the new file
-                const response = await fetch('categories.json?v=' + Date.now());
-                if (!response.ok) throw new Error("File not found");
-                gameData = await response.json();
-                
-                const catSelect = document.getElementById('category-select');
-                catSelect.innerHTML = ''; 
-                Object.keys(gameData).forEach(cat => {
-                    let opt = document.createElement('option');
-                    opt.value = cat; 
-                    opt.innerText = cat;
-                    catSelect.appendChild(opt);
-                });
-            } catch (err) {
-                console.error("Failed to load categories:", err);
-                document.getElementById('category-select').innerHTML = '<option>Error loading categories</option>';
-            }
-        }
-
-        loadCategories();
 
         function createRoom() {
             myName = document.getElementById('username').value || "Host";
@@ -127,6 +130,7 @@
             const roomId = document.getElementById('join-id').value;
             myName = document.getElementById('username').value || "Guest";
             if (!roomId) return alert("Enter a Room ID");
+            
             peer = new Peer();
             peer.on('open', id => {
                 myId = id;
@@ -158,7 +162,7 @@
                 if (data.type === 'game-start') {
                     secretWord = data.word;
                     currentCategory = data.category;
-                    revealRole(data.isImpostor, data.word, data.category);
+                    revealRole(data.isImpostor);
                 }
                 if (data.type === 'open-voting') {
                     showVotingUI();
@@ -197,16 +201,23 @@
 
         function startGame() {
             const cat = document.getElementById('category-select').value;
+            if (!gameData[cat]) return alert("Please wait for categories to load.");
+            
             const items = gameData[cat];
             const item = items[Math.floor(Math.random() * items.length)];
             const impIdx = Math.floor(Math.random() * players.length);
             impostorId = players[impIdx].id;
 
-            players.forEach((p) => {
+            players.forEach((p, idx) => {
                 const isImp = (p.id === impostorId);
-                const payload = { type: 'game-start', isImpostor: isImp, word: isImp ? "" : item.word, category: cat };
+                const payload = { 
+                    type: 'game-start', 
+                    isImpostor: isImp, 
+                    word: isImp ? "" : item.word, 
+                    category: cat 
+                };
                 if (p.id === myId) revealRole(isImp, item.word, cat);
-                else if (p.conn) p.conn.send(payload);
+                else p.conn.send(payload);
             });
         }
 
@@ -221,7 +232,7 @@
             } else {
                 txt.innerText = "YOU ARE INNOCENT";
                 txt.className = "";
-                wordBox.innerText = `Word: ${word}`;
+                wordBox.innerText = `Word: ${word || secretWord}`;
             }
         }
 
