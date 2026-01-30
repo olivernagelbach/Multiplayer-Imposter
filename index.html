@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impostor Game</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { --primary: #6366f1; --bg: #0f172a; --text: #f8fafc; }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .card { background: #1e293b; padding: 2rem; border-radius: 1rem; width: 100%; max-width: 400px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); text-align: center; }
+        button { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; margin: 10px 0; font-size: 1rem; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+        input { width: 100%; padding: 12px; border-radius: 0.5rem; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 10px; box-sizing: border-box; }
+        .hidden { display: none; }
+        .player-list { list-style: none; padding: 0; text-align: left; }
+        .player-item { padding: 10px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
+        .role-box { padding: 20px; border: 2px solid var(--primary); border-radius: 10px; margin: 20px 0; background: #312e81; }
+        .impostor { color: #f43f5e; font-weight: bold; }
+        .vote-btn { background: #334155; text-align: left; }
+        .vote-btn.selected { background: #f43f5e; }
+        select { width: 100%; padding: 10px; margin-bottom: 10px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div id="lobby-screen" class="card">
+        <h1>Impostor Game</h1>
+        <input type="text" id="username" placeholder="Your Name">
+        <button onclick="createRoom()">Create Room (Host)</button>
+        <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
+        <input type="text" id="join-id" placeholder="Enter Room ID">
+        <button onclick="joinRoom()">Join Room</button>
+        <p id="status-msg" style="font-size: 0.8rem; color: #94a3b8;"></p>
+    </div>
+
+    <div id="room-screen" class="card hidden">
+        <h2 id="room-display">Room: ---</h2>
+        <div id="host-controls" class="hidden">
+            <label>Category:</label>
+            <select id="category-select">
+                <option>Loading Categories...</option>
+            </select>
+            <button id="start-btn" onclick="startGame()" disabled>Start Game (Need 3+ Players)</button>
+        </div>
+        <h3>Players Join List:</h3>
+        <ul id="player-list" class="player-list"></ul>
+    </div>
+
+    <div id="game-screen" class="card hidden">
+        <div id="role-reveal" class="role-box">
+            <p>Your Secret Role:</p>
+            <h2 id="role-text">Waiting...</h2>
+            <p id="word-display"></p>
+        </div>
+        <div id="voting-section" class="hidden">
+            <h3>Vote for the Impostor:</h3>
+            <div id="vote-options"></div>
+            <button id="submit-vote-btn" onclick="submitVote()">Submit Vote</button>
+        </div>
+        <div id="host-game-controls" class="hidden">
+            <button onclick="triggerVoting()">Open Voting for Everyone</button>
+        </div>
+    </div>
+
+    <div id="result-screen" class="card hidden">
+        <h1 id="winner-text">Result</h1>
+        <p id="result-details"></p>
+        <button onclick="location.reload()">Back to Lobby</button>
+    </div>
+
+    <script>
+        // --- DATA LOADING ---
+        let gameData = {}; 
+
+        async function loadCategories() {
+            try {
+                const response = await fetch('categories.json');
+                if (!response.ok) throw new Error("File not found");
+                gameData = await response.json();
+                
+                const catSelect = document.getElementById('category-select');
+                catSelect.innerHTML = ''; 
+                Object.keys(gameData).forEach(cat => {
+                    let opt = document.createElement('option');
+                    opt.value = cat; 
+                    opt.innerText = cat;
+                    catSelect.appendChild(opt);
+                });
+            } catch (err) {
+                console.error("Failed to load categories.json:", err);
+                document.getElementById('category-select').innerHTML = '<option>Error loading categories</option>';
+            }
+        }
+
+        // Initialize loading
+        loadCategories();
+
+        // --- PEER & GAME STATE ---
+        let peer, conn, myId, myName;
+        let isHost = false;
+        let players = []; 
+        let votes = {}; 
+        let myVote = null;
+        let impostorId = null;
+        let secretWord = "";
+        let currentCategory = "";
+
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const roomScreen = document.getElementById('room-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const resultScreen = document.getElementById('result-screen');
+
+        function createRoom() {
+            myName = document.getElementById('username').value || "Host";
+            peer = new Peer();
+            peer.on('open', id => {
+                myId = id;
+                isHost = true;
+                document.getElementById('room-display').innerText = `Room ID: ${id}`;
+                document.getElementById('host-controls').classList.remove('hidden');
+                document.getElementById('host-game-controls').classList.remove('hidden');
+                showScreen('room-screen');
+                addPlayer(id, myName);
+            });
+            peer.on('connection', c => setupHostConnection(c));
+        }
+
+        function joinRoom() {
+            const roomId = document.getElementById('join-id').value;
+            myName = document.getElementById('username').value || "Guest";
+            if (!roomId) return alert("Enter a Room ID");
+            
+            peer = new Peer();
+            peer.on('open', id => {
+                myId = id;
+                conn = peer.connect(roomId);
+                setupClientConnection(conn);
+            });
+        }
+
+        function setupHostConnection(c) {
+            c.on('data', data => {
+                if (data.type === 'join-success') {
+                    addPlayer(c.peer, data.name, c);
+                    broadcast({ type: 'player-list', players: players.map(p => ({id: p.id, name: p.name})) });
+                }
+                if (data.type === 'vote') {
+                    votes[data.targetId] = (votes[data.targetId] || 0) + 1;
+                    checkAllVoted();
+                }
+            });
+        }
+
+        function setupClientConnection(c) {
+            c.on('data', data => {
+                if (data.type === 'player-list') {
+                    players = data.players;
+                    updatePlayerListUI();
+                    showScreen('room-screen');
+                }
+                if (data.type === 'game-start') {
+                    secretWord = data.word;
+                    currentCategory = data.category;
+                    revealRole(data.isImpostor);
+                }
+                if (data.type === 'open-voting') {
+                    showVotingUI();
+                }
+                if (data.type === 'game-over') {
+                    showResults(data);
+                }
+            });
+            c.on('open', () => {
+                c.send({ type: 'join-success', name: myName });
+            });
+        }
+
+        function addPlayer(id, name, connection = null) {
+            if (!players.find(p => p.id === id)) {
+                players.push({ id, name, conn: connection });
+                updatePlayerListUI();
+            }
+            if (players.length >= 3) document.getElementById('start-btn').disabled = false;
+        }
+
+        function updatePlayerListUI() {
+            const list = document.getElementById('player-list');
+            list.innerHTML = '';
+            players.forEach(p => {
+                const li = document.createElement('li');
+                li.className = 'player-item';
+                li.innerText = p.name + (p.id === myId ? " (You)" : "");
+                list.appendChild(li);
+            });
+        }
+
+        function broadcast(data) {
+            players.forEach(p => { if (p.conn) p.conn.send(data); });
+        }
+
+        function startGame() {
+            const cat = document.getElementById('category-select').value;
+            if (!gameData[cat]) return alert("Please wait for categories to load.");
+            
+            const items = gameData[cat];
+            const item = items[Math.floor(Math.random() * items.length)];
+            const impIdx = Math.floor(Math.random() * players.length);
+            impostorId = players[impIdx].id;
+
+            players.forEach((p, idx) => {
+                const isImp = (p.id === impostorId);
+                const payload = { 
+                    type: 'game-start', 
+                    isImpostor: isImp, 
+                    word: isImp ? "" : item.word, 
+                    category: cat 
+                };
+                if (p.id === myId) revealRole(isImp, item.word, cat);
+                else p.conn.send(payload);
+            });
+        }
+
+        function revealRole(isImp, word, cat) {
+            showScreen('game-screen');
+            const txt = document.getElementById('role-text');
+            const wordBox = document.getElementById('word-display');
+            if (isImp) {
+                txt.innerText = "YOU ARE THE IMPOSTOR";
+                txt.className = "impostor";
+                wordBox.innerText = `Category: ${cat}. Blend in!`;
+            } else {
+                txt.innerText = "YOU ARE INNOCENT";
+                txt.className = "";
+                wordBox.innerText = `Word: ${word || secretWord}`;
+            }
+        }
+
+        function triggerVoting() {
+            broadcast({ type: 'open-voting' });
+            showVotingUI();
+        }
+
+        function showVotingUI() {
+            document.getElementById('voting-section').classList.remove('hidden');
+            const container = document.getElementById('vote-options');
+            container.innerHTML = '';
+            players.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = 'vote-btn';
+                btn.innerText = p.name;
+                btn.onclick = () => {
+                    myVote = p.id;
+                    Array.from(container.children).forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function submitVote() {
+            if (!myVote) return alert("Select someone!");
+            document.getElementById('submit-vote-btn').disabled = true;
+            if (isHost) {
+                votes[myVote] = (votes[myVote] || 0) + 1;
+                checkAllVoted();
+            } else {
+                conn.send({ type: 'vote', targetId: myVote });
+            }
+        }
+
+        function checkAllVoted() {
+            let totalVotes = Object.values(votes).reduce((a, b) => a + b, 0);
+            if (totalVotes >= players.length) {
+                let votedOutId = Object.keys(votes).reduce((a, b) => votes[a] > votes[b] ? a : b);
+                let impostorCaught = (votedOutId === impostorId);
+                let data = {
+                    type: 'game-over',
+                    caught: impostorCaught,
+                    impostorName: players.find(p => p.id === impostorId).name,
+                    votedOutName: players.find(p => p.id === votedOutId).name
+                };
+                broadcast(data);
+                showResults(data);
+            }
+        }
+
+        function showResults(data) {
+            showScreen('result-screen');
+            document.getElementById('winner-text').innerText = data.caught ? "INNOCENTS WIN!" : "IMPOSTOR WINS!";
+            document.getElementById('result-details').innerText = `${data.votedOutName} was voted out. The Impostor was ${data.impostorName}.`;
+        }
+
+        function showScreen(id) {
+            [lobbyScreen, roomScreen, gameScreen, resultScreen].forEach(s => s.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
