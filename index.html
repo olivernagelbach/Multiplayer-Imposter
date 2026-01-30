@@ -1,789 +1,221 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Impostor Game</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        :root { --primary: #6366f1; --bg: #0f172a; --text: #f8fafc; }
-        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-        .card { background: #1e293b; padding: 2rem; border-radius: 1rem; width: 100%; max-width: 400px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); text-align: center; }
-        button { background: var(--primary); color: white; border: none; padding: 12px 24px; border-radius: 0.5rem; font-weight: 600; cursor: pointer; width: 100%; margin: 10px 0; font-size: 1rem; }
-        button:disabled { background: #475569; cursor: not-allowed; }
-        input { width: 100%; padding: 12px; border-radius: 0.5rem; border: 1px solid #334155; background: #0f172a; color: white; margin-bottom: 10px; box-sizing: border-box; }
-        .hidden { display: none; }
-        .player-list { list-style: none; padding: 0; text-align: left; }
-        .player-item { padding: 10px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; }
-        .role-box { padding: 20px; border: 2px solid var(--primary); border-radius: 10px; margin: 20px 0; background: #312e81; }
-        .impostor { color: #f43f5e; font-weight: bold; }
-        .vote-btn { background: #334155; text-align: left; }
-        .vote-btn.selected { background: #f43f5e; }
-        select { width: 100%; padding: 10px; margin-bottom: 10px; background: #0f172a; color: white; border: 1px solid #334155; border-radius: 5px; }
-    </style>
+<meta charset="UTF-8">
+<title>Impostor Game</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+<style>
+body { font-family: Arial; background:#0f172a; color:white; text-align:center; }
+.card { background:#1e293b; padding:20px; border-radius:10px; max-width:400px; margin:auto; }
+.hidden { display:none; }
+button { padding:10px; margin:5px; width:100%; }
+input, select { width:100%; padding:10px; margin:5px; }
+.player-item { padding:5px; border-bottom:1px solid #444; }
+.vote-btn.selected { background:red; }
+</style>
 </head>
+
 <body>
 
-    <div id="lobby-screen" class="card">
-        <h1>Impostor Game</h1>
-        <input type="text" id="username" placeholder="Your Name">
-        <button onclick="createRoom()">Create Room (Host)</button>
-        <hr style="border: 0; border-top: 1px solid #334155; margin: 20px 0;">
-        <input type="text" id="join-id" placeholder="Enter Room ID">
-        <button onclick="joinRoom()">Join Room</button>
-        <p id="status-msg" style="font-size: 0.8rem; color: #94a3b8;"></p>
-    </div>
+<div id="lobby" class="card">
+<h2>Impostor Game</h2>
+<input id="nameInput" placeholder="Your name">
+<button onclick="createRoom()">Create Room</button>
+<hr>
+<input id="roomInput" placeholder="Room ID">
+<button onclick="joinRoom()">Join Room</button>
+<p id="status"></p>
+</div>
 
-    <div id="room-screen" class="card hidden">
-        <h2 id="room-display">Room: ---</h2>
-        <div id="host-controls" class="hidden">
-            <label>Category:</label>
-            <select id="category-select">
-                <option>Loading Categories...</option>
-            </select>
-            <button id="start-btn" onclick="startGame()" disabled>Start Game (Need 3+ Players)</button>
-        </div>
-        <h3>Players Join List:</h3>
-        <ul id="player-list" class="player-list"></ul>
-    </div>
+<div id="room" class="card hidden">
+<h3 id="roomIdDisplay"></h3>
+<select id="category">
+<option>Animals</option>
+<option>Food</option>
+<option>Places</option>
+</select>
+<button id="startBtn" onclick="startGame()" disabled>Start Game</button>
+<ul id="players"></ul>
+</div>
 
-    <div id="game-screen" class="card hidden">
-        <div id="role-reveal" class="role-box">
-            <p>Your Secret Role:</p>
-            <h2 id="role-text">Waiting...</h2>
-            <p id="word-display"></p>
-        </div>
-        <div id="voting-section" class="hidden">
-            <h3>Vote for the Impostor:</h3>
-            <div id="vote-options"></div>
-            <button id="submit-vote-btn" onclick="submitVote()">Submit Vote</button>
-        </div>
-        <div id="host-game-controls" class="hidden">
-            <button onclick="triggerVoting()">Open Voting for Everyone</button>
-        </div>
-    </div>
+<div id="game" class="card hidden">
+<h2 id="roleText"></h2>
+<p id="wordText"></p>
+<button onclick="openVoting()">Open Voting</button>
+<div id="votes"></div>
+<button onclick="submitVote()">Submit Vote</button>
+</div>
 
-    <div id="result-screen" class="card hidden">
-        <h1 id="winner-text">Result</h1>
-        <p id="result-details"></p>
-        <button onclick="location.reload()">Back to Lobby</button>
-    </div>
+<div id="result" class="card hidden">
+<h1 id="winner"></h1>
+<p id="details"></p>
+<button onclick="location.reload()">Restart</button>
+</div>
 
-    <script>
-        let gameData = {
-            "Animals": [
-                { "word": "Lion", "hint": "King of the jungle" },
-                { "word": "Elephant", "hint": "Has a trunk" },
-                { "word": "Giraffe", "hint": "Very long neck" },
-                { "word": "Tiger", "hint": "Striped big cat" },
-                { "word": "Penguin", "hint": "Flightless bird in tuxedo" },
-                { "word": "Dolphin", "hint": "Intelligent marine mammal" },
-                { "word": "Kangaroo", "hint": "Australian hopper with pouch" },
-                { "word": "Panda", "hint": "Black and white bamboo eater" },
-                { "word": "Koala", "hint": "Eucalyptus-loving marsupial" },
-                { "word": "Cheetah", "hint": "Fastest land animal" },
-                { "word": "Zebra", "hint": "Striped horse relative" },
-                { "word": "Gorilla", "hint": "Largest primate" },
-                { "word": "Rhino", "hint": "Horned thick-skinned giant" },
-                { "word": "Hippo", "hint": "River horse of Africa" },
-                { "word": "Crocodile", "hint": "Ancient reptilian predator" },
-                { "word": "Shark", "hint": "Ocean's apex predator" },
-                { "word": "Eagle", "hint": "Soaring bird of prey" },
-                { "word": "Wolf", "hint": "Pack hunting canine" },
-                { "word": "Bear", "hint": "Hibernating forest dweller" },
-                { "word": "Octopus", "hint": "Eight-armed sea creature" },
-                { "word": "Flamingo", "hint": "Pink wading bird" },
-                { "word": "Peacock", "hint": "Colorful fan-tailed bird" },
-                { "word": "Chameleon", "hint": "Color-changing reptile" },
-                { "word": "Sloth", "hint": "Extremely slow tree dweller" },
-                { "word": "Otter", "hint": "Playful river mammal" },
-                { "word": "Chimpanzee", "hint": "Our closest genetic relative" },
-                { "word": "Leopard", "hint": "Spotted big cat climber" },
-                { "word": "Walrus", "hint": "Tusked Arctic mammal" },
-                { "word": "Moose", "hint": "Largest deer species" },
-                { "word": "Raccoon", "hint": "Masked garbage bandit" },
-                { "word": "Platypus", "hint": "Duck-billed egg-laying mammal" },
-                { "word": "Jellyfish", "hint": "Stinging transparent drifter" },
-                { "word": "Parrot", "hint": "Colorful talking bird" },
-                { "word": "Cobra", "hint": "Hooded venomous snake" },
-                { "word": "Hedgehog", "hint": "Spiky nocturnal mammal" },
-                { "word": "Meerkat", "hint": "Standing desert lookout" },
-                { "word": "Tarantula", "hint": "Large hairy spider" },
-                { "word": "Seal", "hint": "Clapping marine mammal" },
-                { "word": "Toucan", "hint": "Large-beaked tropical bird" },
-                { "word": "Anaconda", "hint": "Massive constricting snake" },
-                { "word": "Bison", "hint": "Shaggy North American bovine" },
-                { "word": "Lemur", "hint": "Madagascar primate" },
-                { "word": "Armadillo", "hint": "Armored burrowing mammal" },
-                { "word": "Pelican", "hint": "Fish-scooping pouch bird" },
-                { "word": "Lynx", "hint": "Tufted-ear wild cat" },
-                { "word": "Mongoose", "hint": "Snake-fighting mammal" },
-                { "word": "Hyena", "hint": "Laughing scavenger" },
-                { "word": "Stingray", "hint": "Flat ocean glider with tail" },
-                { "word": "Pigeon", "hint": "Common city bird" },
-                { "word": "Squirrel", "hint": "Nut-gathering tree rodent" }
-            ],
-            "Places": [
-                { "word": "Beach", "hint": "Sand and ocean" },
-                { "word": "Hospital", "hint": "Doctors and medicine" },
-                { "word": "Airport", "hint": "Planes taking off" }
-            ],
-            "Food": [
-                { "word": "Pizza", "hint": "Cheesy and round" },
-                { "word": "Sushi", "hint": "Raw fish and rice" },
-                { "word": "Burger", "hint": "Patty between buns" },
-                { "word": "Taco", "hint": "Mexican folded shell" },
-                { "word": "Pasta", "hint": "Italian noodle dish" },
-                { "word": "Ramen", "hint": "Japanese noodle soup" },
-                { "word": "Burrito", "hint": "Wrapped Mexican meal" },
-                { "word": "Steak", "hint": "Grilled beef cut" },
-                { "word": "Salad", "hint": "Mixed greens and veggies" },
-                { "word": "Sandwich", "hint": "Filling between bread" },
-                { "word": "Nachos", "hint": "Chips with toppings" },
-                { "word": "Lasagna", "hint": "Layered pasta bake" },
-                { "word": "Waffle", "hint": "Grid-patterned breakfast" },
-                { "word": "Pancake", "hint": "Fluffy breakfast stack" },
-                { "word": "Omelet", "hint": "Folded egg dish" },
-                { "word": "Curry", "hint": "Spiced Indian dish" },
-                { "word": "Dumplings", "hint": "Wrapped dough pockets" },
-                { "word": "Falafel", "hint": "Fried chickpea balls" },
-                { "word": "Kebab", "hint": "Skewered grilled meat" },
-                { "word": "Popcorn", "hint": "Popped kernel snack" },
-                { "word": "Hotdog", "hint": "Sausage in a bun" },
-                { "word": "Brownie", "hint": "Chocolate baked square" },
-                { "word": "Donut", "hint": "Fried dough ring" },
-                { "word": "Muffin", "hint": "Individual baked cake" },
-                { "word": "Croissant", "hint": "Flaky French pastry" },
-                { "word": "Pretzel", "hint": "Twisted salty bread" },
-                { "word": "Bagel", "hint": "Dense boiled bread ring" },
-                { "word": "Quesadilla", "hint": "Grilled cheese tortilla" },
-                { "word": "Risotto", "hint": "Creamy Italian rice" },
-                { "word": "Paella", "hint": "Spanish rice seafood dish" },
-                { "word": "Pho", "hint": "Vietnamese noodle soup" },
-                { "word": "Smoothie", "hint": "Blended fruit drink" },
-                { "word": "Milkshake", "hint": "Thick ice cream drink" },
-                { "word": "Cheesecake", "hint": "Creamy dessert with crust" },
-                { "word": "Tiramisu", "hint": "Coffee-soaked Italian dessert" },
-                { "word": "Fondue", "hint": "Melted cheese for dipping" },
-                { "word": "Souvlaki", "hint": "Greek meat skewers" },
-                { "word": "Couscous", "hint": "North African grain dish" },
-                { "word": "Hummus", "hint": "Chickpea spread dip" },
-                { "word": "Guacamole", "hint": "Mashed avocado dip" },
-                { "word": "Chowder", "hint": "Thick creamy soup" },
-                { "word": "Goulash", "hint": "Hungarian meat stew" },
-                { "word": "Schnitzel", "hint": "Breaded fried cutlet" },
-                { "word": "Tempura", "hint": "Japanese battered fry" },
-                { "word": "Biryani", "hint": "Spiced rice and meat" },
-                { "word": "Jambalaya", "hint": "Creole rice mix" },
-                { "word": "Casserole", "hint": "Baked mixed dish" },
-                { "word": "Chili", "hint": "Spicy bean stew" },
-                { "word": "Pie", "hint": "Filled pastry crust" },
-                { "word": "Cobbler", "hint": "Fruit with topping" }
-            ],
-            "Objects": [
-                { "word": "Pencil", "hint": "Writing tool with eraser" },
-                { "word": "Backpack", "hint": "Carry bag for school" },
-                { "word": "Laptop", "hint": "Portable computer" },
-                { "word": "Headphones", "hint": "Audio ear device" },
-                { "word": "Microwave", "hint": "Kitchen heating appliance" },
-                { "word": "Toothbrush", "hint": "Dental hygiene tool" },
-                { "word": "Umbrella", "hint": "Rain protection device" },
-                { "word": "Scissors", "hint": "Cutting tool with blades" },
-                { "word": "Stapler", "hint": "Paper fastening device" },
-                { "word": "Calculator", "hint": "Math computing device" },
-                { "word": "Compass", "hint": "Direction finding tool" },
-                { "word": "Flashlight", "hint": "Portable light source" },
-                { "word": "Hammer", "hint": "Nail driving tool" },
-                { "word": "Screwdriver", "hint": "Turning tool for fasteners" },
-                { "word": "Wrench", "hint": "Bolt tightening tool" },
-                { "word": "Thermometer", "hint": "Temperature measuring device" },
-                { "word": "Mirror", "hint": "Reflective surface" },
-                { "word": "Pillow", "hint": "Head rest cushion" },
-                { "word": "Blanket", "hint": "Warm covering fabric" },
-                { "word": "Towel", "hint": "Drying cloth" },
-                { "word": "Suitcase", "hint": "Travel luggage container" },
-                { "word": "Wallet", "hint": "Money holding pouch" },
-                { "word": "Watch", "hint": "Wrist time device" },
-                { "word": "Sunglasses", "hint": "Eye protection eyewear" },
-                { "word": "Belt", "hint": "Waist holding strap" },
-                { "word": "Gloves", "hint": "Hand warming covers" },
-                { "word": "Helmet", "hint": "Head protection gear" },
-                { "word": "Camera", "hint": "Photo capturing device" },
-                { "word": "Speaker", "hint": "Sound output device" },
-                { "word": "Charger", "hint": "Battery power cable" },
-                { "word": "Remote", "hint": "TV control device" },
-                { "word": "Keyboard", "hint": "Typing input device" },
-                { "word": "Mouse", "hint": "Computer pointing tool" },
-                { "word": "Printer", "hint": "Paper output machine" },
-                { "word": "Ruler", "hint": "Measuring straight edge" },
-                { "word": "Globe", "hint": "Miniature Earth model" },
-                { "word": "Telescope", "hint": "Star viewing instrument" },
-                { "word": "Microscope", "hint": "Tiny object viewer" },
-                { "word": "Binoculars", "hint": "Distance viewing pair" },
-                { "word": "Clock", "hint": "Wall time display" },
-                { "word": "Calendar", "hint": "Date tracking grid" },
-                { "word": "Notebook", "hint": "Paper writing book" },
-                { "word": "Binder", "hint": "Ring paper organizer" },
-                { "word": "Eraser", "hint": "Pencil mark remover" },
-                { "word": "Sharpener", "hint": "Pencil point maker" },
-                { "word": "Highlighter", "hint": "Bright marking pen" },
-                { "word": "Tape", "hint": "Adhesive strip" },
-                { "word": "Glue", "hint": "Sticky bonding substance" },
-                { "word": "Marker", "hint": "Permanent writing pen" },
-                { "word": "Crayon", "hint": "Waxy coloring stick" },
-                { "word": "Paintbrush", "hint": "Art application tool" },
-                { "word": "Canvas", "hint": "Painting surface cloth" },
-                { "word": "Easel", "hint": "Artist's holding stand" },
-                { "word": "Trophy", "hint": "Victory award item" },
-                { "word": "Medal", "hint": "Achievement badge" },
-                { "word": "Flag", "hint": "Symbol waving cloth" },
-                { "word": "Rope", "hint": "Thick twisted cord" },
-                { "word": "Ladder", "hint": "Climbing step tool" },
-                { "word": "Bucket", "hint": "Carrying container" },
-                { "word": "Broom", "hint": "Floor sweeping tool" }
-            ],
-            "Sports": [
-                { "word": "Basketball", "hint": "Hoop shooting game" },
-                { "word": "Soccer", "hint": "Goal kicking sport" },
-                { "word": "Football", "hint": "Touchdown tackling game" },
-                { "word": "Baseball", "hint": "Bat and diamond sport" },
-                { "word": "Tennis", "hint": "Racket and net game" },
-                { "word": "Volleyball", "hint": "Bumping over net" },
-                { "word": "Hockey", "hint": "Puck and stick sport" },
-                { "word": "Golf", "hint": "Hole aiming game" },
-                { "word": "Swimming", "hint": "Pool lap racing" },
-                { "word": "Boxing", "hint": "Ring punching sport" },
-                { "word": "Wrestling", "hint": "Grappling mat sport" },
-                { "word": "Gymnastics", "hint": "Flipping and beam sport" },
-                { "word": "Skiing", "hint": "Snowy slope gliding" },
-                { "word": "Skateboarding", "hint": "Board trick riding" },
-                { "word": "Surfing", "hint": "Wave riding sport" },
-                { "word": "Cricket", "hint": "Wicket batting game" },
-                { "word": "Rugby", "hint": "Oval ball tackling" },
-                { "word": "Badminton", "hint": "Shuttlecock racket game" },
-                { "word": "Archery", "hint": "Bow and target sport" },
-                { "word": "Fencing", "hint": "Sword dueling sport" },
-                { "word": "Rowing", "hint": "Oar water racing" },
-                { "word": "Cycling", "hint": "Pedal racing sport" },
-                { "word": "Marathon", "hint": "Long distance running" },
-                { "word": "Bowling", "hint": "Pin knocking game" },
-                { "word": "Lacrosse", "hint": "Netted stick sport" }
-            ],
-            "Brands": [
-                { "word": "Nike", "hint": "Swoosh athletic brand" },
-                { "word": "Adidas", "hint": "Three stripes sportswear" },
-                { "word": "Apple", "hint": "Bitten fruit tech company" },
-                { "word": "Samsung", "hint": "Korean electronics giant" },
-                { "word": "Sony", "hint": "PlayStation maker" },
-                { "word": "Microsoft", "hint": "Windows creator" },
-                { "word": "Google", "hint": "Search engine company" },
-                { "word": "Amazon", "hint": "Online retail giant" },
-                { "word": "Netflix", "hint": "Streaming red N" },
-                { "word": "Spotify", "hint": "Green music streamer" },
-                { "word": "Tesla", "hint": "Electric car innovator" },
-                { "word": "Ferrari", "hint": "Italian racing horse" },
-                { "word": "Gucci", "hint": "Double G luxury" },
-                { "word": "Prada", "hint": "Italian fashion house" },
-                { "word": "Rolex", "hint": "Crown watch maker" },
-                { "word": "Supreme", "hint": "Red box streetwear" },
-                { "word": "Vans", "hint": "Skate shoe brand" },
-                { "word": "Converse", "hint": "Star sneaker company" },
-                { "word": "Puma", "hint": "Leaping cat athletic" },
-                { "word": "Reebok", "hint": "CrossFit shoe brand" },
-                { "word": "Walmart", "hint": "Blue retail superstore" },
-                { "word": "Target", "hint": "Bullseye department store" },
-                { "word": "Starbucks", "hint": "Green mermaid coffee" },
-                { "word": "McDonalds", "hint": "Golden arches fast food" },
-                { "word": "Subway", "hint": "Sandwich footlong chain" },
-                { "word": "Disney", "hint": "Mouse ear empire" },
-                { "word": "Canon", "hint": "Camera and printer brand" },
-                { "word": "Honda", "hint": "Japanese car reliability" },
-                { "word": "Toyota", "hint": "World's largest automaker" },
-                { "word": "Lego", "hint": "Building brick toy" }
-            ],
-            "Hot celebrities": [
-                { "word": "Zendaya", "hint": "Euphoria and Spider-Man actress" },
-                { "word": "Timothee", "hint": "Dune heartthrob actor" },
-                { "word": "Margot", "hint": "Barbie movie star" },
-                { "word": "Sydney", "hint": "Euphoria blonde actress" },
-                { "word": "Tom Holland", "hint": "British Spider-Man actor" },
-                { "word": "Jacob Elordi", "hint": "Tall Euphoria actor" },
-                { "word": "Anya", "hint": "Queen's Gambit chess actress" },
-                { "word": "Sabrina", "hint": "Espresso pop singer" },
-                { "word": "Bad Bunny", "hint": "Puerto Rican reggaeton star" },
-                { "word": "Dua Lipa", "hint": "Levitating pop singer" },
-                { "word": "Henry Cavill", "hint": "Superman and Witcher actor" },
-                { "word": "Jenna Ortega", "hint": "Wednesday Addams actress" },
-                { "word": "Pedro Pascal", "hint": "Mandalorian daddy actor" },
-                { "word": "Florence", "hint": "Black Widow actress" },
-                { "word": "Austin Butler", "hint": "Elvis movie actor" },
-                { "word": "Ana de Armas", "hint": "Blonde Marilyn actress" },
-                { "word": "Chris Evans", "hint": "Captain America actor" },
-                { "word": "Scarlett", "hint": "Black Widow actress name" },
-                { "word": "Ryan Gosling", "hint": "Ken from Barbie" },
-                { "word": "Blake Lively", "hint": "Gossip Girl actress" }
-            ],
-            "Clash Royale cards": [
-                { "word": "Knight", "hint": "Mustached good stats" },
-                { "word": "Archers", "hint": "Two pink bow ladies" },
-                { "word": "Goblins", "hint": "Three green speedsters" },
-                { "word": "Giant", "hint": "Big blue building smasher" },
-                { "word": "PEKKA", "hint": "Armored butterfly lover" },
-                { "word": "Minions", "hint": "Three flying purple" },
-                { "word": "Balloon", "hint": "Flying bomb dropper" },
-                { "word": "Witch", "hint": "Skeleton summoning lady" },
-                { "word": "Skeleton Army", "hint": "Tons of tiny bones" },
-                { "word": "Valkyrie", "hint": "Spinning axe woman" },
-                { "word": "Golem", "hint": "Rocky tank troop" },
-                { "word": "Dragon", "hint": "Flying fire breather" },
-                { "word": "Hog Rider", "hint": "Pig riding screamer" },
-                { "word": "Wizard", "hint": "Fireball throwing robes" },
-                { "word": "Mini PEKKA", "hint": "Small pancake lover" },
-                { "word": "Prince", "hint": "Charging lance horseman" },
-                { "word": "Dark Prince", "hint": "Purple shield charger" },
-                { "word": "Barbarians", "hint": "Five angry yellow guys" },
-                { "word": "Musketeer", "hint": "Blue gun lady" },
-                { "word": "Bomber", "hint": "Black bomb tosser" },
-                { "word": "Fireball", "hint": "Big orange spell" },
-                { "word": "Arrows", "hint": "Blue sky projectiles" },
-                { "word": "Zap", "hint": "Electric stun spell" },
-                { "word": "Lightning", "hint": "Three strike spell" },
-                { "word": "Rage", "hint": "Purple speed boost" },
-                { "word": "Freeze", "hint": "Ice stopping spell" },
-                { "word": "Rocket", "hint": "Red big damage spell" },
-                { "word": "Goblin Barrel", "hint": "Three tossed greens" },
-                { "word": "Skeleton Barrel", "hint": "Flying bone drop" },
-                { "word": "Tornado", "hint": "Pulling wind spell" },
-                { "word": "Clone", "hint": "Copying mirror spell" },
-                { "word": "Inferno Tower", "hint": "Beam melting building" },
-                { "word": "Cannon", "hint": "Ground targeting defense" },
-                { "word": "Tesla", "hint": "Electric hidden tower" },
-                { "word": "Bomb Tower", "hint": "Exploding defense building" },
-                { "word": "Elixir Collector", "hint": "Purple resource pump" },
-                { "word": "X-Bow", "hint": "Long range siege" },
-                { "word": "Mortar", "hint": "Short siege lobber" },
-                { "word": "Tombstone", "hint": "Skeleton spawning grave" },
-                { "word": "Barbarian Hut", "hint": "Yellow troop spawner" },
-                { "word": "Goblin Hut", "hint": "Spear thrower spawner" },
-                { "word": "Furnace", "hint": "Fire spirit maker" },
-                { "word": "Ice Spirit", "hint": "Freezing jumper" },
-                { "word": "Fire Spirits", "hint": "Three jumping flames" },
-                { "word": "Electro Spirit", "hint": "Zapping blue jumper" },
-                { "word": "Heal Spirit", "hint": "Green healing jumper" },
-                { "word": "Miner", "hint": "Underground digger" },
-                { "word": "Lumberjack", "hint": "Rage dropping lumberman" },
-                { "word": "Ice Wizard", "hint": "Freezing blue caster" },
-                { "word": "Princess", "hint": "Long range arrow lady" },
-                { "word": "Sparky", "hint": "Charging electric wagon" },
-                { "word": "Lava Hound", "hint": "Flying lava tank" },
-                { "word": "Graveyard", "hint": "Skeleton circle spell" },
-                { "word": "Mega Knight", "hint": "Jumping armored giant" },
-                { "word": "Bandit", "hint": "Dashing masked lady" },
-                { "word": "Electro Wizard", "hint": "Stunning electric guy" },
-                { "word": "Inferno Dragon", "hint": "Beam breathing flyer" },
-                { "word": "Night Witch", "hint": "Bat summoning dark lady" },
-                { "word": "Royal Ghost", "hint": "Invisible purple spirit" },
-                { "word": "Ram Rider", "hint": "Snaring ram lady" },
-                { "word": "Magic Archer", "hint": "Piercing arrow shooter" },
-                { "word": "Fisherman", "hint": "Hooking water guy" },
-                { "word": "Firecracker", "hint": "Backflip explosive girl" },
-                { "word": "Elixir Golem", "hint": "Purple splitting tank" },
-                { "word": "Battle Healer", "hint": "Aura healing fighter" },
-                { "word": "Skeleton King", "hint": "Bone summoning ruler" },
-                { "word": "Archer Queen", "hint": "Invisible bow champion" },
-                { "word": "Golden Knight", "hint": "Dashing gold warrior" },
-                { "word": "Mighty Miner", "hint": "Drilling champion" },
-                { "word": "Monk", "hint": "Reflection martial artist" },
-                { "word": "Phoenix", "hint": "Rebirth fire bird" },
-                { "word": "Royal Recruits", "hint": "Seven shield troops" },
-                { "word": "Goblin Gang", "hint": "Six mixed goblins" },
-                { "word": "Guards", "hint": "Three shield skeletons" },
-                { "word": "Skeleton Dragons", "hint": "Two bone flyers" },
-                { "word": "Mother Witch", "hint": "Cursing pig converter" },
-                { "word": "Electro Giant", "hint": "Reflecting electric tank" },
-                { "word": "Electro Dragon", "hint": "Chain lightning flyer" }
-            ],
-            "NBA Players": [
-                { "word": "LeBron James", "hint": "Four championships different teams" },
-                { "word": "Michael Jordan", "hint": "Six rings with Pippen" },
-                { "word": "Stephen Curry", "hint": "Changed the game forever" },
-                { "word": "Kobe Bryant", "hint": "81 points in one game" },
-                { "word": "Kevin Durant", "hint": "Seven-footer who handles" },
-                { "word": "Giannis", "hint": "Two MVPs before 27" },
-                { "word": "Luka Doncic", "hint": "Teenage EuroLeague MVP" },
-                { "word": "Nikola Jokic", "hint": "Second round draft pick" },
-                { "word": "Joel Embiid", "hint": "Sat out first two years" },
-                { "word": "Jayson Tatum", "hint": "Duke one and done" },
-                { "word": "Magic Johnson", "hint": "Rookie Finals MVP" },
-                { "word": "Larry Bird", "hint": "Three straight league MVPs" },
-                { "word": "Shaquille", "hint": "Rapped and acted too" },
-                { "word": "Tim Duncan", "hint": "Wake Forest power forward" },
-                { "word": "Kareem", "hint": "UCLA legend seven footer" },
-                { "word": "Wilt", "hint": "Kansas to Harlem Globetrotters" },
-                { "word": "Bill Russell", "hint": "Player-coach won titles" },
-                { "word": "Hakeem", "hint": "Houston back-to-back champ" },
-                { "word": "Dirk Nowitzki", "hint": "2011 Finals underdog winner" },
-                { "word": "Charles Barkley", "hint": "Never won a ring" },
-                { "word": "Karl Malone", "hint": "Utah pick and roll" },
-                { "word": "Oscar Robertson", "hint": "Averaged a triple double" },
-                { "word": "Jerry West", "hint": "Lost eight Finals series" },
-                { "word": "Scottie Pippen", "hint": "Seven All-Defensive First Teams" },
-                { "word": "Isiah Thomas", "hint": "Back-to-back Detroit champ" },
-                { "word": "Julius Erving", "hint": "ABA and NBA star" },
-                { "word": "Moses Malone", "hint": "Three-time league MVP" },
-                { "word": "David Robinson", "hint": "Navy midshipman center" },
-                { "word": "Patrick Ewing", "hint": "Georgetown to New York" },
-                { "word": "Allen Iverson", "hint": "Shortest scoring champ ever" },
-                { "word": "Dwyane Wade", "hint": "2006 Finals takeover" },
-                { "word": "Chris Paul", "hint": "Never reached the Finals" },
-                { "word": "James Harden", "hint": "Former sixth man winner" },
-                { "word": "Russell Westbrook", "hint": "UCLA explosive guard" },
-                { "word": "Anthony Davis", "hint": "Kentucky one year wonder" },
-                { "word": "Kawhi Leonard", "hint": "Won with two franchises" },
-                { "word": "Paul George", "hint": "Fresno State to Indiana" },
-                { "word": "Damian Lillard", "hint": "Weber State four-year player" },
-                { "word": "Kyrie Irving", "hint": "Hit 2016 championship shot" },
-                { "word": "Jimmy Butler", "hint": "Marquette to Chicago" },
-                { "word": "Klay Thompson", "hint": "Washington State shooting guard" },
-                { "word": "Draymond Green", "hint": "Michigan State second round" },
-                { "word": "Devin Booker", "hint": "Scored 70 in a loss" },
-                { "word": "Trae Young", "hint": "Oklahoma one and done" },
-                { "word": "Ja Morant", "hint": "Murray State breakout star" },
-                { "word": "Zion Williamson", "hint": "Duke shoe explosion moment" },
-                { "word": "Donovan Mitchell", "hint": "Louisville to Utah Jazz" },
-                { "word": "Bam Adebayo", "hint": "Kentucky defensive center" },
-                { "word": "Shai", "hint": "Trade sent him to OKC" },
-                { "word": "Jrue Holiday", "hint": "UCLA defensive specialist" },
-                { "word": "Rudy Gobert", "hint": "Three Defensive Player awards" },
-                { "word": "Karl-Anthony Towns", "hint": "Kentucky number one pick" },
-                { "word": "DeMar DeRozan", "hint": "USC Trojan to Toronto" },
-                { "word": "Pascal Siakam", "hint": "New Mexico State project" },
-                { "word": "Tyrese Haliburton", "hint": "Iowa State to Sacramento" },
-                { "word": "Paolo Banchero", "hint": "Duke number one overall" },
-                { "word": "LaMelo Ball", "hint": "Overseas before the draft" },
-                { "word": "Jaren Jackson", "hint": "Michigan State one year" },
-                { "word": "Evan Mobley", "hint": "USC twin tower big" },
-                { "word": "Chet Holmgren", "hint": "Gonzaga injured first year" },
-                { "word": "Victor Wembanyama", "hint": "Seven-foot-four rookie sensation" },
-                { "word": "Scottie Barnes", "hint": "Florida State to Toronto" },
-                { "word": "Franz Wagner", "hint": "Michigan brother forward" },
-                { "word": "Anfernee Simons", "hint": "IMG Academy straight to pros" },
-                { "word": "De'Aaron Fox", "hint": "Kentucky lightning quick guard" },
-                { "word": "Domantas Sabonis", "hint": "Gonzaga big man son" },
-                { "word": "Lauri Markkanen", "hint": "Arizona to Chicago Bulls" },
-                { "word": "Dejounte Murray", "hint": "Washington defensive playmaker" },
-                { "word": "Jarrett Allen", "hint": "Texas afro center" },
-                { "word": "Jalen Brunson", "hint": "Villanova two-time champion" },
-                { "word": "Tyrese Maxey", "hint": "Kentucky speedster guard" },
-                { "word": "Desmond Bane", "hint": "TCU four-year player" },
-                { "word": "Miles Bridges", "hint": "Michigan State to Charlotte" },
-                { "word": "Cade Cunningham", "hint": "Oklahoma State top pick" },
-                { "word": "Alperen Sengun", "hint": "Second round Turkish center" },
-                { "word": "Amen Thompson", "hint": "Overtime Elite to Houston" },
-                { "word": "Brandon Miller", "hint": "Alabama second overall pick" },
-                { "word": "Jabari Smith", "hint": "Auburn stretch forward" },
-                { "word": "Jalen Williams", "hint": "Santa Clara second rounder" },
-                { "word": "Austin Reaves", "hint": "Oklahoma undrafted success" },
-                { "word": "Derrick White", "hint": "Colorado transfer to Spurs" },
-                { "word": "Fred VanVleet", "hint": "Wichita State undrafted champion" },
-                { "word": "Darius Garland", "hint": "Vanderbilt five-game freshman" },
-                { "word": "Tyler Herro", "hint": "Kentucky to Heat sixth" },
-                { "word": "Terry Rozier", "hint": "Louisville to Boston bench" },
-                { "word": "Jordan Poole", "hint": "Michigan to Warriors bench" },
-                { "word": "Mikal Bridges", "hint": "Villanova defender traded twice" },
-                { "word": "OG Anunoby", "hint": "Indiana to Toronto wing" },
-                { "word": "Jalen Green", "hint": "G League Ignite to Houston" },
-                { "word": "Scoot Henderson", "hint": "G League to Portland pick" },
-                { "word": "Shaedon Sharpe", "hint": "Kentucky never played there" },
-                { "word": "Jaime Jaquez", "hint": "UCLA four years to Miami" },
-                { "word": "Gradey Dick", "hint": "Kansas shooter to Toronto" },
-                { "word": "Keyonte George", "hint": "Baylor freshman to Utah" },
-                { "word": "Bennedict Mathurin", "hint": "Arizona wing to Indiana" },
-                { "word": "Keegan Murray", "hint": "Iowa twin to Sacramento" },
-                { "word": "Jaden Ivey", "hint": "Purdue athletic fifth pick" }
-            ],
-            "Pokémon": [
-                { "word": "Pikachu", "hint": "Electric yellow mouse" },
-                { "word": "Charizard", "hint": "Fire-flying dragon lizard" },
-                { "word": "Mewtwo", "hint": "Psychic legendary clone" },
-                { "word": "Blastoise", "hint": "Water turtle with cannons" },
-                { "word": "Gengar", "hint": "Ghost poison shadow" },
-                { "word": "Snorlax", "hint": "Sleeping road blocker" },
-                { "word": "Gyarados", "hint": "Evolved raging serpent" },
-                { "word": "Dragonite", "hint": "Orange friendly dragon" },
-                { "word": "Alakazam", "hint": "Spoon psychic genius" },
-                { "word": "Machamp", "hint": "Four-armed fighter" },
-                { "word": "Lucario", "hint": "Aura jackal fighter" },
-                { "word": "Eevee", "hint": "Evolution fox starter" },
-                { "word": "Garchomp", "hint": "Land shark dragon" },
-                { "word": "Greninja", "hint": "Water ninja frog" },
-                { "word": "Blaziken", "hint": "Fire-fighting chicken" },
-                { "word": "Rayquaza", "hint": "Sky legendary serpent" },
-                { "word": "Metagross", "hint": "Steel psychic spider" },
-                { "word": "Tyranitar", "hint": "Rock-dark kaiju" },
-                { "word": "Salamence", "hint": "Blue dragon flyer" },
-                { "word": "Umbreon", "hint": "Dark moon evolution" },
-                { "word": "Vaporeon", "hint": "Water mermaid evolution" },
-                { "word": "Jolteon", "hint": "Electric spike evolution" },
-                { "word": "Flareon", "hint": "Fire fluffy evolution" },
-                { "word": "Bulbasaur", "hint": "Grass seed starter" },
-                { "word": "Squirtle", "hint": "Water turtle starter" }
-            ],
-            "Snacks": [
-                { "word": "Cheetos", "hint": "Cheese finger stainer" },
-                { "word": "Doritos", "hint": "Triangle nacho chips" },
-                { "word": "Lays", "hint": "Can't eat just one" },
-                { "word": "Pringles", "hint": "Tube stacked chips" },
-                { "word": "Oreos", "hint": "Twist lick dunk" },
-                { "word": "Skittles", "hint": "Taste the rainbow" },
-                { "word": "M&Ms", "hint": "Melts in mouth candy" },
-                { "word": "Snickers", "hint": "Hungry chocolate bar" },
-                { "word": "KitKat", "hint": "Break me chocolate" },
-                { "word": "Twix", "hint": "Left or right" },
-                { "word": "Reeses", "hint": "Peanut butter cups" },
-                { "word": "Takis", "hint": "Hot rolled chips" },
-                { "word": "Popcorn", "hint": "Movie theater kernels" },
-                { "word": "Goldfish", "hint": "Cheddar smile crackers" },
-                { "word": "Cheez-Its", "hint": "Square cheese crackers" },
-                { "word": "Ruffles", "hint": "Ridged potato chips" },
-                { "word": "Fritos", "hint": "Corn chip strips" },
-                { "word": "Gushers", "hint": "Fruit burst candy" },
-                { "word": "Nerds", "hint": "Tiny tangy candy" },
-                { "word": "Sour Patch", "hint": "Sour then sweet kids" }
-            ]
-        }
-        function loadCategories() {
-            const catSelect = document.getElementById('category-select');
-            catSelect.innerHTML = ''; 
-            Object.keys(gameData).forEach(cat => {
-                let opt = document.createElement('option');
-                opt.value = cat; 
-                opt.innerText = cat;
-                catSelect.appendChild(opt);
-            });
-        }
+<script>
+let peer, conn;
+let isHost=false;
+let myId,myName;
+let players=[];
+let votes={};
+let myVote=null;
+let impostorId;
+let secretWord="Dog";
 
-        // Initialize loading
-        loadCategories();
+function show(id){
+["lobby","room","game","result"].forEach(d=>document.getElementById(d).classList.add("hidden"));
+document.getElementById(id).classList.remove("hidden");
+}
 
-        // --- PEER & GAME STATE ---
-        let peer, conn, myId, myName;
-        let isHost = false;
-        let players = []; 
-        let votes = {}; 
-        let myVote = null;
-        let impostorId = null;
-        let secretWord = "";
-        let currentCategory = "";
+function createRoom(){
+myName=nameInput.value||"Host";
+peer=new Peer();
+isHost=true;
 
-        const lobbyScreen = document.getElementById('lobby-screen');
-        const roomScreen = document.getElementById('room-screen');
-        const gameScreen = document.getElementById('game-screen');
-        const resultScreen = document.getElementById('result-screen');
+peer.on("open",id=>{
+myId=id;
+roomIdDisplay.innerText="Room ID: "+id;
+players.push({id,name:myName});
+updatePlayers();
+show("room");
+});
 
-        function createRoom() {
-            myName = document.getElementById('username').value || "Host";
-            peer = new Peer();
-            peer.on('open', id => {
-                myId = id;
-                isHost = true;
-                document.getElementById('room-display').innerText = `Room ID: ${id}`;
-                document.getElementById('host-controls').classList.remove('hidden');
-                document.getElementById('host-game-controls').classList.remove('hidden');
-                showScreen('room-screen');
-                addPlayer(id, myName);
-            });
-            peer.on('connection', c => setupHostConnection(c));
-            peer.on('error', err => {
-                alert('Error creating room. Please try again.');
-                console.error('Peer error:', err);
-            });
-        }
+peer.on("connection",c=>{
+c.on("data",data=>{
+if(data.type==="join"){
+players.push({id:c.peer,name:data.name,conn:c});
+broadcastPlayers();
+}
+if(data.type==="vote"){
+votes[data.target]=(votes[data.target]||0)+1;
+checkVotes();
+}
+});
+});
+}
 
-        function joinRoom() {
-            const roomId = document.getElementById('join-id').value;
-            myName = document.getElementById('username').value || "Guest";
-            if (!roomId) return alert("Enter a Room ID");
-            
-            peer = new Peer();
-            peer.on('open', id => {
-                myId = id;
-                conn = peer.connect(roomId);
-                setupClientConnection(conn);
-            });
-            
-            peer.on('error', err => {
-                alert('Failed to join room. Check the Room ID and try again.');
-                console.error('Peer error:', err);
-            });
-        }
+function joinRoom(){
+myName=nameInput.value||"Player";
+const roomId=roomInput.value;
+peer=new Peer();
 
-        function setupHostConnection(c) {
-            c.on('data', data => {
-                if (data.type === 'join-success') {
-                    addPlayer(c.peer, data.name, c);
-                    broadcast({ type: 'player-list', players: players.map(p => ({id: p.id, name: p.name})) });
-                }
-                if (data.type === 'vote') {
-                    votes[data.targetId] = (votes[data.targetId] || 0) + 1;
-                    checkAllVoted();
-                }
-            });
-        }
+peer.on("open",id=>{
+myId=id;
+conn=peer.connect(roomId);
 
-        function setupClientConnection(c) {
-            c.on('open', () => {
-                c.send({ type: 'join-success', name: myName });
-                document.getElementById('room-display').innerText = `Connected to Room`;
-                showScreen('room-screen');
-            });
-            
-            c.on('data', data => {
-                if (data.type === 'player-list') {
-                    players = data.players;
-                    updatePlayerListUI();
-                }
-                if (data.type === 'game-start') {
-                    secretWord = data.word;
-                    currentCategory = data.category;
-                    revealRole(data.isImpostor, data.word, data.category);
-                }
-                if (data.type === 'open-voting') {
-                    showVotingUI();
-                }
-                if (data.type === 'game-over') {
-                    showResults(data);
-                }
-            });
-            
-            c.on('error', err => {
-                alert('Connection error: ' + err);
-                console.error('Connection error:', err);
-            });
-        }
+conn.on("open",()=>{
+conn.send({type:"join",name:myName});
+show("room");
+});
+conn.on("data",data=>{
+if(data.type==="players"){
+players=data.players;
+updatePlayers();
+}
+if(data.type==="start"){
+showRole(data);
+}
+if(data.type==="voteOpen"){
+showVoting();
+}
+if(data.type==="result"){
+showResult(data);
+}
+});
+});
+}
 
-        function addPlayer(id, name, connection = null) {
-            if (!players.find(p => p.id === id)) {
-                players.push({ id, name, conn: connection });
-                updatePlayerListUI();
-            }
-            if (players.length >= 3) document.getElementById('start-btn').disabled = false;
-        }
+function broadcastPlayers(){
+broadcast({type:"players",players});
+updatePlayers();
+}
 
-        function updatePlayerListUI() {
-            const list = document.getElementById('player-list');
-            list.innerHTML = '';
-            players.forEach(p => {
-                const li = document.createElement('li');
-                li.className = 'player-item';
-                li.innerText = p.name + (p.id === myId ? " (You)" : "");
-                list.appendChild(li);
-            });
-        }
+function broadcast(data){
+players.forEach(p=>{
+if(p.conn)p.conn.send(data);
+});
+}
 
-        function broadcast(data) {
-            players.forEach(p => { if (p.conn) p.conn.send(data); });
-        }
+function updatePlayers(){
+playersDiv=players.map(p=>`<li class="player-item">${p.name}</li>`).join("");
+playersList=document.getElementById("players");
+playersList.innerHTML=playersDiv;
+if(players.length>=3) startBtn.disabled=false;
+}
 
-        function startGame() {
-            const cat = document.getElementById('category-select').value;
-            if (!gameData[cat]) return alert("Please select a valid category.");
-            
-            const items = gameData[cat];
-            const item = items[Math.floor(Math.random() * items.length)];
-            const impIdx = Math.floor(Math.random() * players.length);
-            impostorId = players[impIdx].id;
+function startGame(){
+const word="Dog";
+impostorId=players[Math.floor(Math.random()*players.length)].id;
 
-            players.forEach((p) => {
-                const isImp = (p.id === impostorId);
-                const payload = { 
-                    type: 'game-start', 
-                    isImpostor: isImp, 
-                    word: isImp ? "" : item.word, 
-                    category: cat 
-                };
-                if (p.id === myId) {
-                    revealRole(isImp, item.word, cat);
-                } else if (p.conn) {
-                    p.conn.send(payload);
-                }
-            });
-        }
+players.forEach(p=>{
+let payload={
+type:"start",
+isImpostor:p.id===impostorId,
+word:p.id===impostorId?"":word
+};
+if(p.id===myId) showRole(payload);
+else p.conn.send(payload);
+});
+}
 
-        function revealRole(isImp, word, cat) {
-            showScreen('game-screen');
-            const txt = document.getElementById('role-text');
-            const wordBox = document.getElementById('word-display');
-            if (isImp) {
-                txt.innerText = "YOU ARE THE IMPOSTOR";
-                txt.className = "impostor";
-                wordBox.innerText = `Category: ${cat}. Blend in!`;
-            } else {
-                txt.innerText = "YOU ARE INNOCENT";
-                txt.className = "";
-                wordBox.innerText = `Word: ${word || secretWord}`;
-            }
-        }
+function showRole(data){
+show("game");
+if(data.isImpostor){
+roleText.innerText="YOU ARE IMPOSTOR";
+wordText.innerText="Blend in!";
+}else{
+roleText.innerText="YOU ARE INNOCENT";
+wordText.innerText="Word: "+data.word;
+}
+}
 
-        function triggerVoting() {
-            broadcast({ type: 'open-voting' });
-            showVotingUI();
-        }
+function openVoting(){
+broadcast({type:"voteOpen"});
+showVoting();
+}
 
-        function showVotingUI() {
-            document.getElementById('voting-section').classList.remove('hidden');
-            const container = document.getElementById('vote-options');
-            container.innerHTML = '';
-            players.forEach(p => {
-                const btn = document.createElement('button');
-                btn.className = 'vote-btn';
-                btn.innerText = p.name;
-                btn.onclick = () => {
-                    myVote = p.id;
-                    Array.from(container.children).forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected');
-                };
-                container.appendChild(btn);
-            });
-        }
+function showVoting(){
+votesDiv=document.getElementById("votes");
+votesDiv.innerHTML="";
+players.forEach(p=>{
+let b=document.createElement("button");
+b.innerText=p.name;
+b.onclick=()=>{myVote=p.id;}
+votesDiv.appendChild(b);
+});
+}
 
-        function submitVote() {
-            if (!myVote) return alert("Select someone!");
-            document.getElementById('submit-vote-btn').disabled = true;
-            if (isHost) {
-                votes[myVote] = (votes[myVote] || 0) + 1;
-                checkAllVoted();
-            } else {
-                conn.send({ type: 'vote', targetId: myVote });
-            }
-        }
+function submitVote(){
+if(isHost){
+votes[myVote]=(votes[myVote]||0)+1;
+checkVotes();
+}else{
+conn.send({type:"vote",target:myVote});
+}
+}
 
-        function checkAllVoted() {
-            let totalVotes = Object.values(votes).reduce((a, b) => a + b, 0);
-            if (totalVotes >= players.length) {
-                let votedOutId = Object.keys(votes).reduce((a, b) => votes[a] > votes[b] ? a : b);
-                let impostorCaught = (votedOutId === impostorId);
-                let data = {
-                    type: 'game-over',
-                    caught: impostorCaught,
-                    impostorName: players.find(p => p.id === impostorId).name,
-                    votedOutName: players.find(p => p.id === votedOutId).name
-                };
-                broadcast(data);
-                showResults(data);
-            }
-        }
+function checkVotes(){
+let total=Object.values(votes).reduce((a,b)=>a+b,0);
+if(total>=players.length){
+let out=Object.keys(votes).reduce((a,b)=>votes[a]>votes[b]?a:b);
+let caught=out===impostorId;
+let result={
+type:"result",
+caught,
+impostor:players.find(p=>p.id===impostorId).name,
+voted:players.find(p=>p.id===out).name
+};
+broadcast(result);
+showResult(result);
+}
+}
 
-        function showResults(data) {
-            showScreen('result-screen');
-            document.getElementById('winner-text').innerText = data.caught ? "INNOCENTS WIN!" : "IMPOSTOR WINS!";
-            document.getElementById('result-details').innerText = `${data.votedOutName} was voted out. The Impostor was ${data.impostorName}.`;
-        }
-
-        function showScreen(id) {
-            [lobbyScreen, roomScreen, gameScreen, resultScreen].forEach(s => s.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
-        }
-    </script>
+function showResult(data){
+show("result");
+winner.innerText=data.caught?"INNOCENTS WIN":"IMPOSTOR WINS";
+details.innerText=`${data.voted} was voted out. Impostor was ${data.impostor}`;
+}
+</script>
 </body>
 </html>
